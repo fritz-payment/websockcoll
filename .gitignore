@@ -3,4 +3,6 @@ bin
 pkg
 # idea
 .idea
+# binaries
+src/cmd/coll_server/coll_server
 
