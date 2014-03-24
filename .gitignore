@@ -1,0 +1,6 @@
+# go
+bin
+pkg
+# idea
+.idea
+
