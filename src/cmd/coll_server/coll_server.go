@@ -28,7 +28,9 @@ func main() {
 	log.Printf("Using config file: %s", cfg.configFileName)
 
 	srv := NewServer(cfg.Server.Address)
-	srv.ConnLimit = *connectionLimit
+	if *connectionLimit > 0 {
+		srv.LimitConnections(*connectionLimit)
+	}
 
 	log.Fatal(srv.Http.ListenAndServe())
 }

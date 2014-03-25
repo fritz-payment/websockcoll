@@ -4,7 +4,6 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"sync"
 )
 
 const (
@@ -13,11 +12,10 @@ const (
 )
 
 type Server struct {
-	Address   string
-	ConnLimit int
+	Address string
 
-	conns int
-	m     sync.Mutex
+	connLimit int
+	conns     chan struct{}
 
 	Http *http.Server
 }
@@ -33,16 +31,27 @@ func NewServer(address string) *Server {
 	return s
 }
 
+func (s *Server) LimitConnections(count int) {
+	s.connLimit = count
+	s.conns = make(chan struct{}, count)
+	for i := 0; i < count; i++ {
+		s.conns <- struct{}{}
+	}
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if s.ConnLimit != 0 {
-		s.m.Lock()
-		if s.conns >= s.ConnLimit {
-			s.m.Unlock()
+	if s.connLimit != 0 {
+		select {
+		case <-s.conns:
+			defer func() {
+				s.conns <- struct{}{}
+			}()
+			break
+		default:
 			log.Printf("Connection from %s refused. Limit reached.", r.RemoteAddr)
 			http.Error(w, "Connection limit reached", http.StatusServiceUnavailable)
 			return
 		}
-		s.m.Unlock()
 	}
 
 	conn, err := websocket.Upgrade(w, r, nil, ReadBufferSize, WriteBufferSize)
@@ -53,15 +62,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
-
-	s.m.Lock()
-	s.conns++
-	s.m.Unlock()
-	defer func() {
-		s.m.Lock()
-		s.conns--
-		s.m.Unlock()
-	}()
 
 	log.Printf("Websocket connection from %s established.", r.RemoteAddr)
 	// serve websocket connection
